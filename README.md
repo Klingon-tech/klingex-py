@@ -28,33 +28,33 @@ client = KlingEx()
 
 # Get all available markets
 markets = client.markets.get_markets()
-for market in markets:
-    print(f"{market.symbol}: {market.base_asset}/{market.quote_asset}")
+for market in markets[:5]:
+    print(f"{market.symbol}: {market.base_asset_symbol}/{market.quote_asset_symbol}")
 
-# Get ticker for a specific market
-ticker = client.markets.get_ticker("BTC-USDT")
-print(f"BTC-USDT: {ticker.last_price} ({ticker.change_percent_24h}%)")
+# Get tickers for all markets (CMC/CoinGecko format)
+tickers = client.markets.get_tickers()
+for ticker in tickers[:3]:
+    print(f"{ticker.ticker_id}: {ticker.last_price}")
 
-# Get orderbook
-orderbook = client.markets.get_orderbook("BTC-USDT", depth=10)
-print(f"Best bid: {orderbook.bids[0].price}")
-print(f"Best ask: {orderbook.asks[0].price}")
+# Get ticker for a specific market (use underscore format)
+ticker = client.markets.get_ticker("BTC_USDT")
+print(f"BTC_USDT: {ticker.last_price} (bid: {ticker.bid}, ask: {ticker.ask})")
 
-# Get recent trades
-trades = client.markets.get_trades("BTC-USDT", limit=50)
-for trade in trades[:5]:
-    print(f"{trade.side}: {trade.quantity} @ {trade.price}")
+# Get orderbook (market_id is an integer)
+orderbook = client.markets.get_orderbook(market_id=1)
+print(f"Best bid: {orderbook.bids[0][0]} @ {orderbook.bids[0][1]}")
+print(f"Best ask: {orderbook.asks[0][0]} @ {orderbook.asks[0][1]}")
 
 # Get OHLCV candlestick data
-candles = client.markets.get_ohlcv("BTC-USDT", interval="1h", limit=24)
-for candle in candles:
-    print(f"{candle.timestamp}: O={candle.open} H={candle.high} L={candle.low} C={candle.close}")
+candles = client.markets.get_ohlcv(market_id=1, timeframe="1h", limit=24)
+for candle in candles[:3]:
+    print(f"{candle.time_bucket}: O={candle.open_price} H={candle.high_price} L={candle.low_price} C={candle.close_price}")
 ```
 
 ### Authenticated API
 
 ```python
-from klingex import KlingEx, OrderSide, OrderType
+from klingex import KlingEx, OrderSide
 
 # Create client with API key
 client = KlingEx(api_key="your_api_key")
@@ -62,40 +62,44 @@ client = KlingEx(api_key="your_api_key")
 # Get wallet balances
 balances = client.wallet.get_balances()
 for balance in balances:
-    if float(balance.total) > 0:
-        print(f"{balance.symbol}: {balance.available} available, {balance.locked} locked")
+    if int(balance.balance) > 0:
+        print(f"{balance.symbol}: {balance.available} available, {balance.locked_balance} locked")
+
+# Get balance for a specific asset
+btc_balance = client.wallet.get_balance("BTC")
+print(f"BTC: {btc_balance.balance}")
 
 # Place a limit order (human-readable values by default)
 order = client.orders.submit_order(
-    market_id="BTC-USDT",
+    symbol="BTC-USDT",
+    trading_pair_id=1,
     side=OrderSide.BUY,
-    order_type=OrderType.LIMIT,
     quantity="0.001",  # 0.001 BTC
     price="50000",     # $50,000 per BTC
 )
 print(f"Order placed: {order.order_id}")
 
-# Place a market order
-order = client.orders.submit_order(
-    market_id="BTC-USDT",
+# Place a market order (price="0")
+market_order = client.orders.submit_order(
+    symbol="BTC-USDT",
+    trading_pair_id=1,
     side=OrderSide.BUY,
-    order_type=OrderType.MARKET,
     quantity="0.001",
+    price="0",          # Price 0 = market order
+    slippage=0.01,      # 1% slippage tolerance
 )
 
-# Cancel an order
-client.orders.cancel_order(order.order_id)
-
-# Cancel all orders for a market
-client.orders.cancel_all_orders(market_id="BTC-USDT")
+# Cancel an order (requires both order_id and trading_pair_id)
+result = client.orders.cancel_order(order.order_id, trading_pair_id=1)
+print(f"Cancelled: {result.message}, released: {result.released_balance}")
 
 # Get open orders
 open_orders = client.orders.get_open_orders()
 for order in open_orders:
-    print(f"{order.id}: {order.side} {order.quantity} @ {order.price}")
+    print(f"{order.id}: {order.side} {order.amount} @ {order.price}")
 
-# Get order history
-history = client.orders.get_order_history(limit=10)
+# Get all orders (with optional filters)
+orders = client.orders.get_orders(trading_pair_id=1, status="pending", limit=50)
 ```
 
 ### Raw Values Mode
@@ -105,20 +109,20 @@ By default, quantity and price use human-readable values (e.g., "1.5" for 1.5 BT
 ```python
 # Human-readable (default)
 order = client.orders.submit_order(
-    market_id="BTC-USDT",
+    symbol="BTC-USDT",
+    trading_pair_id=1,
     side=OrderSide.BUY,
-    order_type=OrderType.LIMIT,
     quantity="0.5",      # 0.5 BTC
     price="45000",       # $45,000
 )
 
 # Raw base units
 order = client.orders.submit_order(
-    market_id="BTC-USDT",
+    symbol="BTC-USDT",
+    trading_pair_id=1,
     side=OrderSide.BUY,
-    order_type=OrderType.LIMIT,
     quantity="50000000", # 50,000,000 satoshis = 0.5 BTC
-    price="4500000",     # $45,000 in cents
+    price="4500000",     # $45,000 in base units
     raw_values=True,
 )
 ```
@@ -127,7 +131,7 @@ order = client.orders.submit_order(
 
 ```python
 import asyncio
-from klingex import AsyncKlingEx, OrderSide, OrderType
+from klingex import AsyncKlingEx, OrderSide
 
 async def main():
     async with AsyncKlingEx(api_key="your_api_key") as client:
@@ -140,9 +144,9 @@ async def main():
 
         # Place order
         order = await client.orders.submit_order(
-            market_id="BTC-USDT",
+            symbol="BTC-USDT",
+            trading_pair_id=1,
             side=OrderSide.BUY,
-            order_type=OrderType.LIMIT,
             quantity="0.001",
             price="50000",
         )
@@ -195,55 +199,35 @@ async def main():
 asyncio.run(main())
 ```
 
-### Wallet Operations
-
-```python
-# Get deposit address
-address = client.wallet.get_deposit_address("BTC")
-print(f"Deposit to: {address.address}")
-
-# For multi-chain assets
-address = client.wallet.get_deposit_address("USDT", chain="erc20")
-
-# Get deposit history
-deposits = client.wallet.get_deposits(asset_id="BTC", limit=10)
-for deposit in deposits:
-    print(f"{deposit.amount} BTC - {deposit.status}")
-
-# Request withdrawal
-withdrawal = client.wallet.request_withdrawal(
-    asset_id="BTC",
-    amount="0.01",
-    address="bc1q...",
-    two_fa_code="123456",  # If 2FA enabled
-)
-print(f"Withdrawal ID: {withdrawal.id}")
-
-# Get withdrawal history
-withdrawals = client.wallet.get_withdrawals(status="completed")
-```
-
 ### Invoice/Payment Processing
 
 ```python
 # Create an invoice
 invoice = client.invoices.create_invoice(
-    asset_id="BTC",
-    amount="0.001",
+    currency="USDT",
+    amount="100.00",
+    accepted_coins=["BTC", "ETH", "USDT"],
     description="Order #12345",
-    callback_url="https://yoursite.com/webhook",
-    redirect_url="https://yoursite.com/thank-you",
     expires_in_minutes=60,
 )
 print(f"Invoice ID: {invoice.id}")
-print(f"Pay to: {invoice.payment_address}")
+print(f"Payment URL: {invoice.payment_page_url}")
 
-# Get invoice status
+# List invoices
+invoice_list = client.invoices.list_invoices(status="pending", page=1, page_size=20)
+for inv in invoice_list.invoices:
+    print(f"{inv.id}: {inv.status}")
+
+# Get invoice details
 invoice = client.invoices.get_invoice(invoice.id)
 print(f"Status: {invoice.status}")
 
-# Get payments for invoice
-payments = client.invoices.get_invoice_payments(invoice.id)
+# Cancel a pending invoice
+client.invoices.cancel_invoice(invoice.id)
+
+# Get fee statistics
+fees = client.invoices.get_fee_stats()
+print(f"Fee rate: {fees.current_fee_rate_percent}%")
 ```
 
 ## Error Handling
@@ -260,7 +244,13 @@ from klingex import (
 client = KlingEx(api_key="your_api_key")
 
 try:
-    order = client.orders.submit_order(...)
+    order = client.orders.submit_order(
+        symbol="BTC-USDT",
+        trading_pair_id=1,
+        side="BUY",
+        quantity="0.001",
+        price="50000",
+    )
 except AuthenticationError as e:
     print(f"Auth failed: {e.message}")
 except RateLimitError as e:
@@ -291,9 +281,9 @@ client = KlingEx(
 
 ### Endpoint Modules
 
-- `client.markets` - Public market data (assets, markets, tickers, orderbook, trades, OHLCV)
+- `client.markets` - Public market data (assets, markets, tickers, orderbook, OHLCV)
 - `client.orders` - Order management (submit, cancel, list orders)
-- `client.wallet` - Wallet operations (balances, deposits, withdrawals)
+- `client.wallet` - Wallet operations (balances)
 - `client.invoices` - Invoice/payment processing
 
 ### Types
@@ -301,7 +291,6 @@ client = KlingEx(
 - `OrderSide` - `BUY`, `SELL`
 - `OrderType` - `LIMIT`, `MARKET`
 - `OrderStatus` - `PENDING`, `OPEN`, `PARTIAL`, `FILLED`, `CANCELLED`
-- `TimeInForce` - `GTC`, `IOC`, `FOK`
 
 ### Exceptions
 

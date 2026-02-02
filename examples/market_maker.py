@@ -13,7 +13,6 @@ from klingex.client import AsyncKlingEx
 from klingex import KlingExWebSocket, OrderSide, OrderType, KlingExError
 
 API_KEY = os.getenv("KLINGEX_API_KEY", "your_api_key")
-API_SECRET = os.getenv("KLINGEX_API_SECRET", "your_api_secret")
 
 # Configuration
 MARKET_ID = "BTC-USDT"
@@ -133,7 +132,7 @@ class SimpleMarketMaker:
 
 
 async def main():
-    async with AsyncKlingEx(api_key=API_KEY, api_secret=API_SECRET) as client:
+    async with AsyncKlingEx(api_key=API_KEY) as client:
         # Check balances first
         print("=== Checking Balances ===")
         try:

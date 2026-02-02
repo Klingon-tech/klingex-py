@@ -1,176 +1,189 @@
 """
-Invoices Endpoint - Payment processing
+Invoices Endpoint - Payment invoice management
 """
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from klingex.types import Invoice, InvoicePayment
+from klingex.types import Invoice, InvoiceListResponse, InvoiceFeeStats
 
 if TYPE_CHECKING:
     from klingex.http import HttpClient, AsyncHttpClient
 
 
 class InvoicesEndpoint:
-    """Invoice/payment endpoints (authenticated)"""
+    """Invoice management endpoints"""
 
     def __init__(self, client: "HttpClient"):
         self._client = client
 
     def create_invoice(
         self,
-        asset_id: str,
+        currency: str,
         amount: str,
+        accepted_coins: List[str],
+        external_id: Optional[str] = None,
+        expires_in_minutes: int = 30,
         description: Optional[str] = None,
-        callback_url: Optional[str] = None,
-        redirect_url: Optional[str] = None,
-        expires_in_minutes: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        buyer_email: Optional[str] = None,
+        payment_tolerance: Optional[int] = None,
     ) -> Invoice:
-        """Create a payment invoice
+        """Create a new payment invoice
 
         Args:
-            asset_id: Asset to accept payment in
-            amount: Payment amount
-            description: Optional invoice description
-            callback_url: URL to receive payment notifications
-            redirect_url: URL to redirect user after payment
-            expires_in_minutes: Invoice expiration time in minutes
-            metadata: Optional custom metadata
+            currency: Denomination currency (e.g., "USDT", "BTC")
+            amount: Human-readable amount (e.g., "100.00")
+            accepted_coins: Asset symbols to accept (e.g., ["BTC", "ETH", "USDT"])
+            external_id: Your reference ID (max 255 chars)
+            expires_in_minutes: Expiration time (5-1440 min, default: 30)
+            description: Description shown on payment page
+            metadata: Custom data stored with invoice
+            buyer_email: Buyer email for notifications
+            payment_tolerance: Accept X% as full payment (90-100, default: 100)
         """
         data: Dict[str, Any] = {
-            "assetId": asset_id,
-            "amount": amount,
+            "denomination": {
+                "currency": currency,
+                "amount": amount,
+            },
+            "accepted_coins": accepted_coins,
+            "expires_in_minutes": expires_in_minutes,
         }
+        if external_id:
+            data["external_id"] = external_id
         if description:
             data["description"] = description
-        if callback_url:
-            data["callbackUrl"] = callback_url
-        if redirect_url:
-            data["redirectUrl"] = redirect_url
-        if expires_in_minutes:
-            data["expiresInMinutes"] = expires_in_minutes
         if metadata:
             data["metadata"] = metadata
+        if buyer_email:
+            data["buyer_email"] = buyer_email
+        if payment_tolerance:
+            data["payment_tolerance"] = payment_tolerance
 
-        result = self._client.post("/api/invoices", data=data, authenticated=True)
-        return Invoice.model_validate(result)
+        response = self._client.post("/api/invoices", data=data, authenticated=True)
+        return Invoice.model_validate(response.get("data", response))
 
-    def get_invoice(self, invoice_id: str) -> Invoice:
-        """Get an invoice by ID
-
-        Args:
-            invoice_id: Invoice ID
-        """
-        data = self._client.get(f"/api/invoices/{invoice_id}", authenticated=True)
-        return Invoice.model_validate(data)
-
-    def get_invoices(
+    def list_invoices(
         self,
         status: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> List[Invoice]:
-        """Get invoice history
+        external_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> InvoiceListResponse:
+        """List invoices with optional filters
 
         Args:
-            status: Optional status to filter by (pending, paid, expired, cancelled)
-            limit: Maximum number of invoices to return
-            offset: Pagination offset
+            status: Filter by status (pending, confirming, paid, overpaid, underpaid, expired, cancelled)
+            external_id: Filter by your external reference ID
+            page: Page number (default: 1)
+            page_size: Items per page (1-100, default: 20)
         """
         params: Dict[str, Any] = {
-            "limit": limit,
-            "offset": offset,
+            "page": page,
+            "page_size": page_size,
         }
         if status:
             params["status"] = status
+        if external_id:
+            params["external_id"] = external_id
 
-        data = self._client.get("/api/invoices", params=params, authenticated=True)
-        invoices_data = data.get("invoices", data) if isinstance(data, dict) else data
-        return [Invoice.model_validate(i) for i in invoices_data]
+        response = self._client.get("/api/invoices", params=params, authenticated=True)
+        return InvoiceListResponse.model_validate(response.get("data", response))
 
-    def cancel_invoice(self, invoice_id: str) -> Dict[str, Any]:
-        """Cancel an invoice
-
-        Args:
-            invoice_id: Invoice ID to cancel
-        """
-        return self._client.delete(f"/api/invoices/{invoice_id}", authenticated=True)
-
-    def get_invoice_payments(self, invoice_id: str) -> List[InvoicePayment]:
-        """Get payments for an invoice
+    def get_invoice(self, invoice_id: str) -> Invoice:
+        """Get invoice details
 
         Args:
-            invoice_id: Invoice ID
+            invoice_id: Invoice UUID
         """
-        data = self._client.get(f"/api/invoices/{invoice_id}/payments", authenticated=True)
-        payments_data = data.get("payments", data) if isinstance(data, dict) else data
-        return [InvoicePayment.model_validate(p) for p in payments_data]
+        response = self._client.get(f"/api/invoices/{invoice_id}", authenticated=True)
+        return Invoice.model_validate(response.get("data", response))
+
+    def cancel_invoice(self, invoice_id: str) -> Dict[str, str]:
+        """Cancel a pending invoice
+
+        Args:
+            invoice_id: Invoice UUID to cancel
+        """
+        return self._client.post(f"/api/invoices/{invoice_id}/cancel", authenticated=True)
+
+    def get_fee_stats(self) -> InvoiceFeeStats:
+        """Get invoice fee statistics"""
+        response = self._client.get("/api/invoices/fees", authenticated=True)
+        return InvoiceFeeStats.model_validate(response.get("data", response))
 
 
 class AsyncInvoicesEndpoint:
-    """Async invoice/payment endpoints (authenticated)"""
+    """Async invoice management endpoints"""
 
     def __init__(self, client: "AsyncHttpClient"):
         self._client = client
 
     async def create_invoice(
         self,
-        asset_id: str,
+        currency: str,
         amount: str,
+        accepted_coins: List[str],
+        external_id: Optional[str] = None,
+        expires_in_minutes: int = 30,
         description: Optional[str] = None,
-        callback_url: Optional[str] = None,
-        redirect_url: Optional[str] = None,
-        expires_in_minutes: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        buyer_email: Optional[str] = None,
+        payment_tolerance: Optional[int] = None,
     ) -> Invoice:
-        """Create a payment invoice"""
+        """Create a new payment invoice"""
         data: Dict[str, Any] = {
-            "assetId": asset_id,
-            "amount": amount,
+            "denomination": {
+                "currency": currency,
+                "amount": amount,
+            },
+            "accepted_coins": accepted_coins,
+            "expires_in_minutes": expires_in_minutes,
         }
+        if external_id:
+            data["external_id"] = external_id
         if description:
             data["description"] = description
-        if callback_url:
-            data["callbackUrl"] = callback_url
-        if redirect_url:
-            data["redirectUrl"] = redirect_url
-        if expires_in_minutes:
-            data["expiresInMinutes"] = expires_in_minutes
         if metadata:
             data["metadata"] = metadata
+        if buyer_email:
+            data["buyer_email"] = buyer_email
+        if payment_tolerance:
+            data["payment_tolerance"] = payment_tolerance
 
-        result = await self._client.post("/api/invoices", data=data, authenticated=True)
-        return Invoice.model_validate(result)
+        response = await self._client.post("/api/invoices", data=data, authenticated=True)
+        return Invoice.model_validate(response.get("data", response))
 
-    async def get_invoice(self, invoice_id: str) -> Invoice:
-        """Get an invoice by ID"""
-        data = await self._client.get(f"/api/invoices/{invoice_id}", authenticated=True)
-        return Invoice.model_validate(data)
-
-    async def get_invoices(
+    async def list_invoices(
         self,
         status: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> List[Invoice]:
-        """Get invoice history"""
+        external_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> InvoiceListResponse:
+        """List invoices with optional filters"""
         params: Dict[str, Any] = {
-            "limit": limit,
-            "offset": offset,
+            "page": page,
+            "page_size": page_size,
         }
         if status:
             params["status"] = status
+        if external_id:
+            params["external_id"] = external_id
 
-        data = await self._client.get("/api/invoices", params=params, authenticated=True)
-        invoices_data = data.get("invoices", data) if isinstance(data, dict) else data
-        return [Invoice.model_validate(i) for i in invoices_data]
+        response = await self._client.get("/api/invoices", params=params, authenticated=True)
+        return InvoiceListResponse.model_validate(response.get("data", response))
 
-    async def cancel_invoice(self, invoice_id: str) -> Dict[str, Any]:
-        """Cancel an invoice"""
-        return await self._client.delete(f"/api/invoices/{invoice_id}", authenticated=True)
+    async def get_invoice(self, invoice_id: str) -> Invoice:
+        """Get invoice details"""
+        response = await self._client.get(f"/api/invoices/{invoice_id}", authenticated=True)
+        return Invoice.model_validate(response.get("data", response))
 
-    async def get_invoice_payments(self, invoice_id: str) -> List[InvoicePayment]:
-        """Get payments for an invoice"""
-        data = await self._client.get(f"/api/invoices/{invoice_id}/payments", authenticated=True)
-        payments_data = data.get("payments", data) if isinstance(data, dict) else data
-        return [InvoicePayment.model_validate(p) for p in payments_data]
+    async def cancel_invoice(self, invoice_id: str) -> Dict[str, str]:
+        """Cancel a pending invoice"""
+        return await self._client.post(f"/api/invoices/{invoice_id}/cancel", authenticated=True)
+
+    async def get_fee_stats(self) -> InvoiceFeeStats:
+        """Get invoice fee statistics"""
+        response = await self._client.get("/api/invoices/fees", authenticated=True)
+        return InvoiceFeeStats.model_validate(response.get("data", response))

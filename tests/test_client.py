@@ -27,13 +27,9 @@ class TestKlingExClient:
         client.close()
 
     def test_client_with_credentials(self):
-        """Test client initialization with API credentials"""
-        client = KlingEx(
-            api_key="test_key",
-            api_secret="test_secret",
-        )
+        """Test client initialization with API key"""
+        client = KlingEx(api_key="test_key")
         assert client._http.api_key == "test_key"
-        assert client._http.api_secret == "test_secret"
         client.close()
 
     def test_client_context_manager(self):

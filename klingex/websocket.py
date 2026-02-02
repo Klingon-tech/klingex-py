@@ -34,11 +34,9 @@ class KlingExWebSocket:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
         ws_url: Optional[str] = None,
     ):
         self.api_key = api_key
-        self.api_secret = api_secret
         self.ws_url = ws_url or self.DEFAULT_WS_URL
         self._ws: Optional[WebSocketClientProtocol] = None
         self._subscriptions: Set[str] = set()
@@ -59,8 +57,8 @@ class KlingExWebSocket:
                 self._ws = await websockets.connect(self.ws_url)
                 self._reconnect_delay = 1.0  # Reset delay on successful connection
 
-                # Authenticate if credentials provided
-                if self.api_key and self.api_secret:
+                # Authenticate if API key provided
+                if self.api_key:
                     await self._authenticate()
 
                 # Resubscribe to channels
@@ -90,23 +88,9 @@ class KlingExWebSocket:
         if not self._ws:
             return
 
-        import hashlib
-        import hmac
-        import time
-
-        timestamp = str(int(time.time() * 1000))
-        payload = f"{timestamp}websocket_auth"
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            payload.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
-
         auth_message = {
             "type": "auth",
             "apiKey": self.api_key,
-            "timestamp": timestamp,
-            "signature": signature,
         }
         await self._ws.send(json.dumps(auth_message))
 

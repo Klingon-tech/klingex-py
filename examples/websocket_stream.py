@@ -9,15 +9,11 @@ import os
 from klingex import KlingExWebSocket
 
 API_KEY = os.getenv("KLINGEX_API_KEY")
-API_SECRET = os.getenv("KLINGEX_API_SECRET")
 
 
 async def main():
     # Create WebSocket client
-    ws = KlingExWebSocket(
-        api_key=API_KEY,
-        api_secret=API_SECRET,
-    )
+    ws = KlingExWebSocket(api_key=API_KEY)
 
     # Define message handlers
     def on_ticker(data):
@@ -52,8 +48,8 @@ async def main():
         await ws.subscribe_orderbook("BTC-USDT", on_orderbook)
         await ws.subscribe_trades("BTC-USDT", on_trade)
 
-        # Subscribe to authenticated channels (if credentials provided)
-        if API_KEY and API_SECRET:
+        # Subscribe to authenticated channels (if API key provided)
+        if API_KEY:
             await ws.subscribe_user_orders(on_user_order)
             print("Subscribed to user order updates")
 

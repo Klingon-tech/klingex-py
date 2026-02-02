@@ -6,31 +6,28 @@ from klingex.client import KlingEx, AsyncKlingEx
 from klingex.http import KlingExError, AuthenticationError, RateLimitError, ValidationError
 from klingex.websocket import KlingExWebSocket
 from klingex.types import (
-    # Common
+    # Enums
     OrderSide,
     OrderType,
     OrderStatus,
-    TimeInForce,
     # Market data
     Asset,
     Market,
     Ticker,
-    OrderBookEntry,
     OrderBook,
     OHLCV,
-    Trade,
     # Orders
     Order,
-    OrderSubmission,
     OrderResponse,
+    CancelOrderResponse,
     # Wallet
     Balance,
-    Deposit,
-    Withdrawal,
-    WithdrawalRequest,
-    DepositAddress,
     # Invoices
     Invoice,
+    InvoiceListResponse,
+    InvoiceFeeStats,
+    InvoiceDenomination,
+    PaymentOption,
     InvoicePayment,
 )
 
@@ -49,23 +46,20 @@ __all__ = [
     "OrderSide",
     "OrderType",
     "OrderStatus",
-    "TimeInForce",
     # Types
     "Asset",
     "Market",
     "Ticker",
-    "OrderBookEntry",
     "OrderBook",
     "OHLCV",
-    "Trade",
     "Order",
-    "OrderSubmission",
     "OrderResponse",
+    "CancelOrderResponse",
     "Balance",
-    "Deposit",
-    "Withdrawal",
-    "WithdrawalRequest",
-    "DepositAddress",
     "Invoice",
+    "InvoiceListResponse",
+    "InvoiceFeeStats",
+    "InvoiceDenomination",
+    "PaymentOption",
     "InvoicePayment",
 ]

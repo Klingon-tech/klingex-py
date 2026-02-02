@@ -56,11 +56,8 @@ for candle in candles:
 ```python
 from klingex import KlingEx, OrderSide, OrderType
 
-# Create client with API credentials
-client = KlingEx(
-    api_key="your_api_key",
-    api_secret="your_api_secret"
-)
+# Create client with API key
+client = KlingEx(api_key="your_api_key")
 
 # Get wallet balances
 balances = client.wallet.get_balances()
@@ -133,7 +130,7 @@ import asyncio
 from klingex import AsyncKlingEx, OrderSide, OrderType
 
 async def main():
-    async with AsyncKlingEx(api_key="key", api_secret="secret") as client:
+    async with AsyncKlingEx(api_key="your_api_key") as client:
         # Fetch multiple resources concurrently
         markets, tickers, balances = await asyncio.gather(
             client.markets.get_markets(),
@@ -160,10 +157,7 @@ import asyncio
 from klingex import KlingExWebSocket
 
 async def main():
-    ws = KlingExWebSocket(
-        api_key="your_key",      # Optional, for private channels
-        api_secret="your_secret"
-    )
+    ws = KlingExWebSocket(api_key="your_api_key")  # Optional, for private channels
 
     # Define handlers
     def on_ticker(data):
@@ -263,7 +257,7 @@ from klingex import (
     ValidationError,
 )
 
-client = KlingEx(api_key="key", api_secret="secret")
+client = KlingEx(api_key="your_api_key")
 
 try:
     order = client.orders.submit_order(...)
@@ -281,8 +275,7 @@ except KlingExError as e:
 
 ```python
 client = KlingEx(
-    api_key="your_key",
-    api_secret="your_secret",
+    api_key="your_api_key",
     base_url="https://api.klingex.io",  # Custom API URL
     timeout=30.0,                        # Request timeout in seconds
 )

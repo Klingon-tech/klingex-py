@@ -7,14 +7,13 @@ Demonstrates how to use the KlingEx SDK for basic trading operations.
 import os
 from klingex import KlingEx, OrderSide, OrderType, KlingExError
 
-# Initialize client with API credentials
+# Initialize client with API key
 API_KEY = os.getenv("KLINGEX_API_KEY", "your_api_key")
-API_SECRET = os.getenv("KLINGEX_API_SECRET", "your_api_secret")
 
 
 def main():
     # Create client instance
-    with KlingEx(api_key=API_KEY, api_secret=API_SECRET) as client:
+    with KlingEx(api_key=API_KEY) as client:
         # ========================================
         # Public Endpoints (no auth required)
         # ========================================

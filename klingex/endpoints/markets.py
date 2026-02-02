@@ -4,7 +4,7 @@ Markets Endpoint - Public market data
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from klingex.types import Asset, Market, Ticker, OrderBook, OrderBookEntry, OHLCV, Trade
+from klingex.types import Asset, Market, Ticker, OrderBook, OHLCV
 
 if TYPE_CHECKING:
     from klingex.http import HttpClient, AsyncHttpClient
@@ -22,93 +22,71 @@ class MarketsEndpoint:
         assets_data = data.get("assets", data) if isinstance(data, dict) else data
         return [Asset.model_validate(a) for a in assets_data]
 
-    def get_asset(self, asset_id: str) -> Asset:
-        """Get a specific asset by ID"""
-        data = self._client.get(f"/api/assets/{asset_id}")
-        return Asset.model_validate(data)
-
     def get_markets(self) -> List[Market]:
         """Get all available markets"""
         data = self._client.get("/api/markets")
-        markets_data = data.get("markets", data) if isinstance(data, dict) else data
-        return [Market.model_validate(m) for m in markets_data]
+        return [Market.model_validate(m) for m in data]
 
-    def get_market(self, market_id: str) -> Market:
+    def get_market(self, market_id: int) -> Market:
         """Get a specific market by ID"""
-        data = self._client.get(f"/api/markets/{market_id}")
-        return Market.model_validate(data)
+        markets = self.get_markets()
+        for market in markets:
+            if market.id == market_id:
+                return market
+        raise ValueError(f"Market {market_id} not found")
 
     def get_tickers(self) -> List[Ticker]:
-        """Get tickers for all markets"""
+        """Get tickers for all markets (CMC/CoinGecko format)"""
         data = self._client.get("/api/tickers")
-        tickers_data = data.get("tickers", data) if isinstance(data, dict) else data
-        return [Ticker.model_validate(t) for t in tickers_data]
+        return [Ticker.model_validate(t) for t in data]
 
-    def get_ticker(self, market_id: str) -> Ticker:
-        """Get ticker for a specific market"""
-        data = self._client.get(f"/api/tickers/{market_id}")
-        return Ticker.model_validate(data)
+    def get_ticker(self, ticker_id: str) -> Ticker:
+        """Get ticker for a specific market
 
-    def get_orderbook(self, market_id: str, depth: int = 50) -> OrderBook:
+        Args:
+            ticker_id: Ticker ID like "BTC_USDT"
+        """
+        tickers = self.get_tickers()
+        for ticker in tickers:
+            if ticker.ticker_id == ticker_id:
+                return ticker
+        raise ValueError(f"Ticker {ticker_id} not found")
+
+    def get_orderbook(self, market_id: int) -> OrderBook:
         """Get orderbook for a market
 
         Args:
-            market_id: Market identifier
-            depth: Number of levels to return (default: 50)
+            market_id: Trading pair ID
         """
-        data = self._client.get(f"/api/orderbook/{market_id}", params={"depth": depth})
+        data = self._client.get("/api/orderbook", params={"marketId": market_id, "isCmc": "false"})
         return OrderBook.model_validate(data)
-
-    def get_trades(
-        self,
-        market_id: str,
-        limit: int = 100,
-        before: Optional[str] = None,
-    ) -> List[Trade]:
-        """Get recent trades for a market
-
-        Args:
-            market_id: Market identifier
-            limit: Maximum number of trades to return (default: 100)
-            before: Cursor for pagination (trade ID)
-        """
-        params: Dict[str, Any] = {"limit": limit}
-        if before:
-            params["before"] = before
-
-        data = self._client.get(f"/api/trades/{market_id}", params=params)
-        trades_data = data.get("trades", data) if isinstance(data, dict) else data
-        return [Trade.model_validate(t) for t in trades_data]
 
     def get_ohlcv(
         self,
-        market_id: str,
-        interval: str = "1h",
-        limit: int = 100,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        market_id: int,
+        timeframe: str = "5m",
+        limit: Optional[int] = None,
+        start_date: Optional[str] = None,
     ) -> List[OHLCV]:
         """Get OHLCV (candlestick) data for a market
 
         Args:
-            market_id: Market identifier
-            interval: Candlestick interval (1m, 5m, 15m, 1h, 4h, 1d)
-            limit: Maximum number of candles to return (default: 100)
-            start_time: Start timestamp in milliseconds
-            end_time: End timestamp in milliseconds
+            market_id: Trading pair ID
+            timeframe: Candlestick interval (1m, 5m, 15m, 30m, 1h, 4h, 1D)
+            limit: Maximum number of candles to return
+            start_date: ISO 8601 date string for start time
         """
         params: Dict[str, Any] = {
-            "interval": interval,
-            "limit": limit,
+            "marketId": market_id,
+            "timeframe": timeframe,
         }
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
+        if limit:
+            params["limit"] = limit
+        if start_date:
+            params["startDate"] = start_date
 
-        data = self._client.get(f"/api/ohlcv/{market_id}", params=params)
-        ohlcv_data = data.get("ohlcv", data) if isinstance(data, dict) else data
-        return [OHLCV.model_validate(o) for o in ohlcv_data]
+        data = self._client.get("/api/ohlcv", params=params)
+        return [OHLCV.model_validate(o) for o in data]
 
 
 class AsyncMarketsEndpoint:
@@ -123,71 +101,53 @@ class AsyncMarketsEndpoint:
         assets_data = data.get("assets", data) if isinstance(data, dict) else data
         return [Asset.model_validate(a) for a in assets_data]
 
-    async def get_asset(self, asset_id: str) -> Asset:
-        """Get a specific asset by ID"""
-        data = await self._client.get(f"/api/assets/{asset_id}")
-        return Asset.model_validate(data)
-
     async def get_markets(self) -> List[Market]:
         """Get all available markets"""
         data = await self._client.get("/api/markets")
-        markets_data = data.get("markets", data) if isinstance(data, dict) else data
-        return [Market.model_validate(m) for m in markets_data]
+        return [Market.model_validate(m) for m in data]
 
-    async def get_market(self, market_id: str) -> Market:
+    async def get_market(self, market_id: int) -> Market:
         """Get a specific market by ID"""
-        data = await self._client.get(f"/api/markets/{market_id}")
-        return Market.model_validate(data)
+        markets = await self.get_markets()
+        for market in markets:
+            if market.id == market_id:
+                return market
+        raise ValueError(f"Market {market_id} not found")
 
     async def get_tickers(self) -> List[Ticker]:
-        """Get tickers for all markets"""
+        """Get tickers for all markets (CMC/CoinGecko format)"""
         data = await self._client.get("/api/tickers")
-        tickers_data = data.get("tickers", data) if isinstance(data, dict) else data
-        return [Ticker.model_validate(t) for t in tickers_data]
+        return [Ticker.model_validate(t) for t in data]
 
-    async def get_ticker(self, market_id: str) -> Ticker:
+    async def get_ticker(self, ticker_id: str) -> Ticker:
         """Get ticker for a specific market"""
-        data = await self._client.get(f"/api/tickers/{market_id}")
-        return Ticker.model_validate(data)
+        tickers = await self.get_tickers()
+        for ticker in tickers:
+            if ticker.ticker_id == ticker_id:
+                return ticker
+        raise ValueError(f"Ticker {ticker_id} not found")
 
-    async def get_orderbook(self, market_id: str, depth: int = 50) -> OrderBook:
+    async def get_orderbook(self, market_id: int) -> OrderBook:
         """Get orderbook for a market"""
-        data = await self._client.get(f"/api/orderbook/{market_id}", params={"depth": depth})
+        data = await self._client.get("/api/orderbook", params={"marketId": market_id, "isCmc": "false"})
         return OrderBook.model_validate(data)
-
-    async def get_trades(
-        self,
-        market_id: str,
-        limit: int = 100,
-        before: Optional[str] = None,
-    ) -> List[Trade]:
-        """Get recent trades for a market"""
-        params: Dict[str, Any] = {"limit": limit}
-        if before:
-            params["before"] = before
-
-        data = await self._client.get(f"/api/trades/{market_id}", params=params)
-        trades_data = data.get("trades", data) if isinstance(data, dict) else data
-        return [Trade.model_validate(t) for t in trades_data]
 
     async def get_ohlcv(
         self,
-        market_id: str,
-        interval: str = "1h",
-        limit: int = 100,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        market_id: int,
+        timeframe: str = "5m",
+        limit: Optional[int] = None,
+        start_date: Optional[str] = None,
     ) -> List[OHLCV]:
         """Get OHLCV (candlestick) data for a market"""
         params: Dict[str, Any] = {
-            "interval": interval,
-            "limit": limit,
+            "marketId": market_id,
+            "timeframe": timeframe,
         }
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
+        if limit:
+            params["limit"] = limit
+        if start_date:
+            params["startDate"] = start_date
 
-        data = await self._client.get(f"/api/ohlcv/{market_id}", params=params)
-        ohlcv_data = data.get("ohlcv", data) if isinstance(data, dict) else data
-        return [OHLCV.model_validate(o) for o in ohlcv_data]
+        data = await self._client.get("/api/ohlcv", params=params)
+        return [OHLCV.model_validate(o) for o in data]

@@ -24,15 +24,14 @@ class KlingEx:
         # Public endpoints (no auth required)
         client = KlingEx()
         markets = client.markets.get_markets()
-        ticker = client.markets.get_ticker("BTC-USDT")
 
         # Authenticated endpoints
-        client = KlingEx(api_key="your_key", api_secret="your_secret")
+        client = KlingEx(api_key="your_api_key")
         balances = client.wallet.get_balances()
         order = client.orders.submit_order(
-            market_id="BTC-USDT",
-            side="buy",
-            order_type="limit",
+            symbol="BTC-USDT",
+            trading_pair_id=1,
+            side=OrderSide.BUY,
             quantity="0.1",
             price="50000"
         )
@@ -42,7 +41,6 @@ class KlingEx:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
         base_url: Optional[str] = None,
         timeout: float = 30.0,
     ):
@@ -51,13 +49,11 @@ class KlingEx:
 
         Args:
             api_key: API key for authenticated endpoints
-            api_secret: API secret for authenticated endpoints
             base_url: Base URL for the API (default: https://api.klingex.io)
             timeout: Request timeout in seconds (default: 30)
         """
         self._http = HttpClient(
             api_key=api_key,
-            api_secret=api_secret,
             base_url=base_url,
             timeout=timeout,
         )
@@ -91,7 +87,7 @@ class AsyncKlingEx:
         from klingex import AsyncKlingEx
 
         async def main():
-            async with AsyncKlingEx(api_key="key", api_secret="secret") as client:
+            async with AsyncKlingEx(api_key="your_api_key") as client:
                 markets = await client.markets.get_markets()
                 balances = await client.wallet.get_balances()
 
@@ -102,7 +98,6 @@ class AsyncKlingEx:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
         base_url: Optional[str] = None,
         timeout: float = 30.0,
     ):
@@ -111,13 +106,11 @@ class AsyncKlingEx:
 
         Args:
             api_key: API key for authenticated endpoints
-            api_secret: API secret for authenticated endpoints
             base_url: Base URL for the API (default: https://api.klingex.io)
             timeout: Request timeout in seconds (default: 30)
         """
         self._http = AsyncHttpClient(
             api_key=api_key,
-            api_secret=api_secret,
             base_url=base_url,
             timeout=timeout,
         )

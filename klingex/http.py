@@ -2,11 +2,7 @@
 KlingEx HTTP Client
 """
 
-import hashlib
-import hmac
-import time
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
 
 import httpx
 
@@ -48,12 +44,10 @@ class HttpClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
         base_url: Optional[str] = None,
         timeout: float = DEFAULT_TIMEOUT,
     ):
         self.api_key = api_key
-        self.api_secret = api_secret
         self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self._client = httpx.Client(timeout=timeout)
@@ -68,32 +62,13 @@ class HttpClient:
     def __exit__(self, *args: Any) -> None:
         self.close()
 
-    def _sign_request(self, method: str, path: str, params: Dict[str, Any]) -> Dict[str, str]:
+    def _get_auth_headers(self) -> Dict[str, str]:
         """Generate authentication headers"""
-        if not self.api_key or not self.api_secret:
-            raise AuthenticationError("API key and secret are required for authenticated requests")
-
-        timestamp = str(int(time.time() * 1000))
-
-        # Build signature payload
-        if params:
-            sorted_params = sorted(params.items())
-            query_string = urlencode(sorted_params)
-            payload = f"{timestamp}{method.upper()}{path}?{query_string}"
-        else:
-            payload = f"{timestamp}{method.upper()}{path}"
-
-        # HMAC-SHA256 signature
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            payload.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        if not self.api_key:
+            raise AuthenticationError("API key is required for authenticated requests")
 
         return {
             "X-API-Key": self.api_key,
-            "X-Timestamp": timestamp,
-            "X-Signature": signature,
         }
 
     def _handle_response(self, response: httpx.Response) -> Any:
@@ -149,10 +124,7 @@ class HttpClient:
 
         # Add authentication headers
         if authenticated:
-            sign_params = params or {}
-            if data:
-                sign_params = {**sign_params, **data}
-            auth_headers = self._sign_request(method, path, sign_params)
+            auth_headers = self._get_auth_headers()
             headers.update(auth_headers)
 
         response = self._client.request(
@@ -212,12 +184,10 @@ class AsyncHttpClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
         base_url: Optional[str] = None,
         timeout: float = DEFAULT_TIMEOUT,
     ):
         self.api_key = api_key
-        self.api_secret = api_secret
         self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self._client = httpx.AsyncClient(timeout=timeout)
@@ -232,32 +202,13 @@ class AsyncHttpClient:
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
-    def _sign_request(self, method: str, path: str, params: Dict[str, Any]) -> Dict[str, str]:
+    def _get_auth_headers(self) -> Dict[str, str]:
         """Generate authentication headers"""
-        if not self.api_key or not self.api_secret:
-            raise AuthenticationError("API key and secret are required for authenticated requests")
-
-        timestamp = str(int(time.time() * 1000))
-
-        # Build signature payload
-        if params:
-            sorted_params = sorted(params.items())
-            query_string = urlencode(sorted_params)
-            payload = f"{timestamp}{method.upper()}{path}?{query_string}"
-        else:
-            payload = f"{timestamp}{method.upper()}{path}"
-
-        # HMAC-SHA256 signature
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            payload.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        if not self.api_key:
+            raise AuthenticationError("API key is required for authenticated requests")
 
         return {
             "X-API-Key": self.api_key,
-            "X-Timestamp": timestamp,
-            "X-Signature": signature,
         }
 
     def _handle_response(self, response: httpx.Response) -> Any:
@@ -308,10 +259,7 @@ class AsyncHttpClient:
             params = {k: v for k, v in params.items() if v is not None}
 
         if authenticated:
-            sign_params = params or {}
-            if data:
-                sign_params = {**sign_params, **data}
-            auth_headers = self._sign_request(method, path, sign_params)
+            auth_headers = self._get_auth_headers()
             headers.update(auth_headers)
 
         response = await self._client.request(

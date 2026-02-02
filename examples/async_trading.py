@@ -10,11 +10,10 @@ from klingex.client import AsyncKlingEx
 from klingex import OrderSide, OrderType, KlingExError
 
 API_KEY = os.getenv("KLINGEX_API_KEY", "your_api_key")
-API_SECRET = os.getenv("KLINGEX_API_SECRET", "your_api_secret")
 
 
 async def main():
-    async with AsyncKlingEx(api_key=API_KEY, api_secret=API_SECRET) as client:
+    async with AsyncKlingEx(api_key=API_KEY) as client:
         # Fetch multiple markets concurrently
         print("=== Fetching Data Concurrently ===")
 

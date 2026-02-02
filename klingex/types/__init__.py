@@ -3,16 +3,15 @@ KlingEx SDK Types and Models
 """
 
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from datetime import datetime
-from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
 # Enums
 class OrderSide(str, Enum):
-    BUY = "buy"
-    SELL = "sell"
+    BUY = "BUY"
+    SELL = "SELL"
 
 
 class OrderType(str, Enum):
@@ -28,267 +27,240 @@ class OrderStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class TimeInForce(str, Enum):
-    GTC = "gtc"  # Good Till Cancelled
-    IOC = "ioc"  # Immediate Or Cancel
-    FOK = "fok"  # Fill Or Kill
+# Market Models
+class Market(BaseModel):
+    """Trading market/pair"""
+    id: int
+    base_asset_id: int
+    quote_asset_id: int
+    min_trade_amount: str
+    max_trade_amount: str
+    tick_size: str
+    step_size: str
+    maker_fee_rate: str
+    taker_fee_rate: str
+    price_decimals: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    base_asset_symbol: str
+    base_asset_name: str
+    quote_asset_symbol: str
+    quote_asset_name: str
+    volume_24h: str
+    priceChange24h: str
+    last_price: str
+    base_decimals: int
+    quote_decimals: int
+    volume_24h_human: str
+
+    @property
+    def symbol(self) -> str:
+        """Returns trading pair symbol like BTC-USDT"""
+        return f"{self.base_asset_symbol}-{self.quote_asset_symbol}"
 
 
-# Base Models
 class Asset(BaseModel):
     """Cryptocurrency asset"""
-    id: str
     symbol: str
     name: str
     decimals: int
-    chain: Optional[str] = None
-    contract_address: Optional[str] = Field(None, alias="contractAddress")
-    is_active: bool = Field(True, alias="isActive")
-    min_withdrawal: Optional[str] = Field(None, alias="minWithdrawal")
-    withdrawal_fee: Optional[str] = Field(None, alias="withdrawalFee")
-
-    class Config:
-        populate_by_name = True
-
-
-class Market(BaseModel):
-    """Trading market/pair"""
-    id: str
-    symbol: str
-    base_asset: str = Field(..., alias="baseAsset")
-    quote_asset: str = Field(..., alias="quoteAsset")
-    base_decimals: int = Field(..., alias="baseDecimals")
-    quote_decimals: int = Field(..., alias="quoteDecimals")
-    min_order_size: Optional[str] = Field(None, alias="minOrderSize")
-    max_order_size: Optional[str] = Field(None, alias="maxOrderSize")
-    price_tick: Optional[str] = Field(None, alias="priceTick")
-    is_active: bool = Field(True, alias="isActive")
-
-    class Config:
-        populate_by_name = True
+    is_crypto: bool
+    chain_type: str
+    chain_id: Optional[int] = None
+    evm_network: Optional[str] = None
+    contract_address: Optional[str] = None
+    is_active: bool
+    withdrawal_enabled: bool
+    website: Optional[str] = None
+    twitter_url: Optional[str] = None
+    discord_url: Optional[str] = None
+    telegram_url: Optional[str] = None
+    description: Optional[str] = None
 
 
 class Ticker(BaseModel):
-    """Market ticker data"""
-    market_id: str = Field(..., alias="marketId")
-    symbol: str
-    last_price: str = Field(..., alias="lastPrice")
-    bid: Optional[str] = None
-    ask: Optional[str] = None
-    high_24h: Optional[str] = Field(None, alias="high24h")
-    low_24h: Optional[str] = Field(None, alias="low24h")
-    volume_24h: Optional[str] = Field(None, alias="volume24h")
-    change_24h: Optional[str] = Field(None, alias="change24h")
-    change_percent_24h: Optional[str] = Field(None, alias="changePercent24h")
-    timestamp: Optional[datetime] = None
-
-    class Config:
-        populate_by_name = True
-
-
-class OrderBookEntry(BaseModel):
-    """Single orderbook entry"""
-    price: str
-    quantity: str
+    """Market ticker data (CMC/CoinGecko format)"""
+    ticker_id: str
+    base_currency: str
+    target_currency: str
+    last_price: str
+    base_volume: str
+    target_volume: str
+    bid: str
+    ask: str
+    high: str
+    low: str
 
 
 class OrderBook(BaseModel):
     """Orderbook snapshot"""
-    market_id: str = Field(..., alias="marketId")
-    bids: List[OrderBookEntry]
-    asks: List[OrderBookEntry]
-    timestamp: Optional[datetime] = None
-
-    class Config:
-        populate_by_name = True
+    trading_pair_id: int
+    base_symbol: str
+    quote_symbol: str
+    bids: List[List[str]]  # [[price, amount], ...]
+    asks: List[List[str]]  # [[price, amount], ...]
 
 
 class OHLCV(BaseModel):
     """Candlestick/OHLCV data"""
-    timestamp: datetime
-    open: str
-    high: str
-    low: str
-    close: str
+    time_bucket: datetime
+    open_price: str
+    high_price: str
+    low_price: str
+    close_price: str
     volume: str
-
-
-class Trade(BaseModel):
-    """Executed trade"""
-    id: str
-    market_id: str = Field(..., alias="marketId")
-    price: str
-    quantity: str
-    side: OrderSide
-    timestamp: datetime
-    is_maker: Optional[bool] = Field(None, alias="isMaker")
-
-    class Config:
-        populate_by_name = True
+    number_of_trades: int
 
 
 # Order Models
 class Order(BaseModel):
     """Order details"""
     id: str
-    market_id: str = Field(..., alias="marketId")
-    side: OrderSide
-    type: OrderType
-    status: OrderStatus
-    price: Optional[str] = None
-    quantity: str
-    filled_quantity: str = Field("0", alias="filledQuantity")
-    remaining_quantity: Optional[str] = Field(None, alias="remainingQuantity")
-    average_price: Optional[str] = Field(None, alias="averagePrice")
-    time_in_force: Optional[TimeInForce] = Field(None, alias="timeInForce")
-    created_at: datetime = Field(..., alias="createdAt")
-    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
-
-    class Config:
-        populate_by_name = True
-
-
-class OrderSubmission(BaseModel):
-    """Order submission request"""
-    market_id: str = Field(..., alias="marketId")
-    side: OrderSide
-    type: OrderType
-    quantity: str
-    price: Optional[str] = None
-    time_in_force: Optional[TimeInForce] = Field(None, alias="timeInForce")
-    raw_values: bool = Field(False, alias="rawValues")
-
-    class Config:
-        populate_by_name = True
+    trading_pair_id: int
+    side: str
+    type: str
+    price: str
+    amount: str
+    filled_amount: str
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class OrderResponse(BaseModel):
     """Order submission response"""
-    order_id: str = Field(..., alias="orderId")
-    status: str
-    message: Optional[str] = None
+    message: str
+    order_id: str
 
-    class Config:
-        populate_by_name = True
+
+class CancelOrderResponse(BaseModel):
+    """Cancel order response"""
+    message: str
+    released_balance: Optional[str] = None
 
 
 # Wallet Models
 class Balance(BaseModel):
     """Wallet balance"""
-    asset_id: str = Field(..., alias="assetId")
+    id: int
     symbol: str
-    available: str
-    locked: str
-    total: str
+    name: str
+    decimals: int
+    balance: str
+    locked_balance: str
+    wallet_id: Optional[str] = None
+    deposit_address: Optional[str] = None
+    min_deposit: Optional[str] = None
+    min_withdrawal: Optional[str] = None
+    withdrawal_fee: Optional[str] = None
 
-    class Config:
-        populate_by_name = True
+    @property
+    def available(self) -> str:
+        """Returns available balance (total - locked)"""
+        return str(int(self.balance) - int(self.locked_balance))
 
-
-class Deposit(BaseModel):
-    """Deposit record"""
-    id: str
-    asset_id: str = Field(..., alias="assetId")
-    amount: str
-    status: str
-    tx_hash: Optional[str] = Field(None, alias="txHash")
-    confirmations: Optional[int] = None
-    created_at: datetime = Field(..., alias="createdAt")
-
-    class Config:
-        populate_by_name = True
-
-
-class Withdrawal(BaseModel):
-    """Withdrawal record"""
-    id: str
-    asset_id: str = Field(..., alias="assetId")
-    amount: str
-    fee: Optional[str] = None
-    address: str
-    status: str
-    tx_hash: Optional[str] = Field(None, alias="txHash")
-    created_at: datetime = Field(..., alias="createdAt")
-
-    class Config:
-        populate_by_name = True
-
-
-class WithdrawalRequest(BaseModel):
-    """Withdrawal request"""
-    asset_id: str = Field(..., alias="assetId")
-    amount: str
-    address: str
-    memo: Optional[str] = None
-    two_fa_code: Optional[str] = Field(None, alias="twoFaCode")
-
-    class Config:
-        populate_by_name = True
-
-
-class DepositAddress(BaseModel):
-    """Deposit address"""
-    asset_id: str = Field(..., alias="assetId")
-    address: str
-    memo: Optional[str] = None
-    chain: Optional[str] = None
-
-    class Config:
-        populate_by_name = True
+    @property
+    def total(self) -> str:
+        """Returns total balance"""
+        return self.balance
 
 
 # Invoice Models
-class Invoice(BaseModel):
-    """Payment invoice"""
-    id: str
-    merchant_id: str = Field(..., alias="merchantId")
-    asset_id: str = Field(..., alias="assetId")
+class InvoiceDenomination(BaseModel):
+    """Invoice denomination"""
+    type: str = "crypto"
+    currency: str
     amount: str
-    status: str
-    description: Optional[str] = None
-    callback_url: Optional[str] = Field(None, alias="callbackUrl")
-    redirect_url: Optional[str] = Field(None, alias="redirectUrl")
-    expires_at: Optional[datetime] = Field(None, alias="expiresAt")
-    created_at: datetime = Field(..., alias="createdAt")
-    payment_address: Optional[str] = Field(None, alias="paymentAddress")
+    decimals: Optional[int] = None
 
-    class Config:
-        populate_by_name = True
+
+class PaymentOption(BaseModel):
+    """Invoice payment option"""
+    asset_id: int
+    symbol: str
+    name: str
+    chain_type: str
+    address: str
+    expected_amount: str
+    exchange_rate: str
+    qr_code_data: Optional[str] = None
 
 
 class InvoicePayment(BaseModel):
     """Invoice payment record"""
     id: str
-    invoice_id: str = Field(..., alias="invoiceId")
+    asset_id: int
+    symbol: str
     amount: str
-    tx_hash: Optional[str] = Field(None, alias="txHash")
+    tx_hash: Optional[str] = None
     status: str
-    created_at: datetime = Field(..., alias="createdAt")
+    confirmations: Optional[int] = None
+    confirmations_required: Optional[int] = None
+    confirmed_at: Optional[datetime] = None
+    created_at: datetime
 
-    class Config:
-        populate_by_name = True
+
+class Invoice(BaseModel):
+    """Payment invoice"""
+    id: str
+    external_id: Optional[str] = None
+    status: str
+    denomination: Optional[InvoiceDenomination] = None
+    # For list view (flat fields)
+    denomination_type: Optional[str] = None
+    denomination_currency: Optional[str] = None
+    amount: Optional[str] = None
+    payment_options: Optional[List[PaymentOption]] = None
+    payments: Optional[List[InvoicePayment]] = None
+    fee_rate_bps: Optional[int] = None
+    fee_rate_percent: Optional[str] = None
+    total_received: Optional[str] = None
+    fee_amount: Optional[str] = None
+    net_amount: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    buyer_email: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    payment_page_url: Optional[str] = None
+
+
+class InvoiceListResponse(BaseModel):
+    """Invoice list response"""
+    invoices: List[Invoice]
+    total_count: int
+    page: int
+    page_size: int
+
+
+class InvoiceFeeStats(BaseModel):
+    """Invoice fee statistics"""
+    current_fee_rate_bps: int
+    current_fee_rate_percent: str
+    paid_invoice_count: int
+    total_fees_collected: str
+    total_net_amount: str
 
 
 __all__ = [
     "OrderSide",
     "OrderType",
     "OrderStatus",
-    "TimeInForce",
     "Asset",
     "Market",
     "Ticker",
-    "OrderBookEntry",
     "OrderBook",
     "OHLCV",
-    "Trade",
     "Order",
-    "OrderSubmission",
     "OrderResponse",
+    "CancelOrderResponse",
     "Balance",
-    "Deposit",
-    "Withdrawal",
-    "WithdrawalRequest",
-    "DepositAddress",
-    "Invoice",
+    "InvoiceDenomination",
+    "PaymentOption",
     "InvoicePayment",
+    "Invoice",
+    "InvoiceListResponse",
+    "InvoiceFeeStats",
 ]

@@ -7,7 +7,7 @@ Demonstrates how to use the async KlingEx client for concurrent operations.
 import asyncio
 import os
 from klingex.client import AsyncKlingEx
-from klingex import OrderSide, OrderType, KlingExError
+from klingex import OrderSide, KlingExError
 
 API_KEY = os.getenv("KLINGEX_API_KEY", "your_api_key")
 
@@ -41,7 +41,7 @@ async def main():
             print(f"  Tickers error: {tickers}")
 
         if isinstance(balances, list):
-            non_zero = [b for b in balances if float(b.total) > 0]
+            non_zero = [b for b in balances if int(b.balance) > 0]
             print(f"  Found {len(non_zero)} non-zero balances")
         else:
             print(f"  Balances error: {balances}")
@@ -51,16 +51,16 @@ async def main():
         try:
             orders = await asyncio.gather(
                 client.orders.submit_order(
-                    market_id="BTC-USDT",
+                    symbol="BTC-USDT",
+                    trading_pair_id=1,
                     side=OrderSide.BUY,
-                    order_type=OrderType.LIMIT,
                     quantity="0.001",
                     price="40000",
                 ),
                 client.orders.submit_order(
-                    market_id="ETH-USDT",
+                    symbol="ETH-USDT",
+                    trading_pair_id=2,
                     side=OrderSide.BUY,
-                    order_type=OrderType.LIMIT,
                     quantity="0.01",
                     price="2000",
                 ),
@@ -71,16 +71,19 @@ async def main():
                 if isinstance(order, Exception):
                     print(f"  Order failed: {order}")
                 else:
-                    print(f"  Order {order.order_id}: {order.status}")
+                    print(f"  Order {order.order_id}: {order.message}")
 
-        except KlingExError as e:
-            print(f"  Error: {e.message}")
+            # Cancel orders
+            print("\n=== Cancelling Orders ===")
+            for i, order in enumerate(orders):
+                if not isinstance(order, Exception):
+                    trading_pair_id = 1 if i == 0 else 2
+                    try:
+                        result = await client.orders.cancel_order(order.order_id, trading_pair_id)
+                        print(f"  Cancelled {order.order_id}: {result.message}")
+                    except KlingExError as e:
+                        print(f"  Cancel failed: {e.message}")
 
-        # Cancel all orders
-        print("\n=== Cancelling All Orders ===")
-        try:
-            result = await client.orders.cancel_all_orders()
-            print(f"  Result: {result}")
         except KlingExError as e:
             print(f"  Error: {e.message}")
 

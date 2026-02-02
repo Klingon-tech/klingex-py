@@ -10,21 +10,23 @@ import asyncio
 import os
 from decimal import Decimal
 from klingex.client import AsyncKlingEx
-from klingex import KlingExWebSocket, OrderSide, OrderType, KlingExError
+from klingex import OrderSide, KlingExError
 
 API_KEY = os.getenv("KLINGEX_API_KEY", "your_api_key")
 
 # Configuration
-MARKET_ID = "BTC-USDT"
+SYMBOL = "BTC-USDT"
+TRADING_PAIR_ID = 1
 SPREAD_PERCENT = Decimal("0.002")  # 0.2% spread
 ORDER_SIZE = "0.001"  # BTC per side
 UPDATE_INTERVAL = 5  # seconds
 
 
 class SimpleMarketMaker:
-    def __init__(self, client: AsyncKlingEx, market_id: str):
+    def __init__(self, client: AsyncKlingEx, symbol: str, trading_pair_id: int):
         self.client = client
-        self.market_id = market_id
+        self.symbol = symbol
+        self.trading_pair_id = trading_pair_id
         self.current_price: Decimal | None = None
         self.buy_order_id: str | None = None
         self.sell_order_id: str | None = None
@@ -38,10 +40,10 @@ class SimpleMarketMaker:
         """Cancel any existing orders"""
         tasks = []
         if self.buy_order_id:
-            tasks.append(self.client.orders.cancel_order(self.buy_order_id))
+            tasks.append(self.client.orders.cancel_order(self.buy_order_id, self.trading_pair_id))
             self.buy_order_id = None
         if self.sell_order_id:
-            tasks.append(self.client.orders.cancel_order(self.sell_order_id))
+            tasks.append(self.client.orders.cancel_order(self.sell_order_id, self.trading_pair_id))
             self.sell_order_id = None
 
         if tasks:
@@ -66,16 +68,16 @@ class SimpleMarketMaker:
             # Place both orders concurrently
             buy_result, sell_result = await asyncio.gather(
                 self.client.orders.submit_order(
-                    market_id=self.market_id,
+                    symbol=self.symbol,
+                    trading_pair_id=self.trading_pair_id,
                     side=OrderSide.BUY,
-                    order_type=OrderType.LIMIT,
                     quantity=ORDER_SIZE,
                     price=bid_price_str,
                 ),
                 self.client.orders.submit_order(
-                    market_id=self.market_id,
+                    symbol=self.symbol,
+                    trading_pair_id=self.trading_pair_id,
                     side=OrderSide.SELL,
-                    order_type=OrderType.LIMIT,
                     quantity=ORDER_SIZE,
                     price=ask_price_str,
                 ),
@@ -100,15 +102,16 @@ class SimpleMarketMaker:
     async def run(self):
         """Main market maker loop"""
         self.running = True
-        print(f"Starting market maker for {self.market_id}")
+        print(f"Starting market maker for {self.symbol}")
         print(f"Spread: {SPREAD_PERCENT * 100}%, Order size: {ORDER_SIZE}")
         print("-" * 50)
 
         while self.running:
             try:
-                # Get current ticker
-                ticker = await self.client.markets.get_ticker(self.market_id)
-                await self.update_price(ticker.last_price)
+                # Get current market info
+                market = await self.client.markets.get_market(self.trading_pair_id)
+                if market:
+                    await self.update_price(market.last_price)
 
                 # Cancel existing orders and place new ones
                 await self.cancel_existing_orders()
@@ -147,7 +150,7 @@ async def main():
         print()
 
         # Create and run market maker
-        mm = SimpleMarketMaker(client, MARKET_ID)
+        mm = SimpleMarketMaker(client, SYMBOL, TRADING_PAIR_ID)
 
         try:
             await mm.run()

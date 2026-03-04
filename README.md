@@ -199,6 +199,62 @@ async def main():
 asyncio.run(main())
 ```
 
+### WebSocket Trading
+
+Place and cancel orders directly over the WebSocket connection for lower latency. Each request includes a `requestId` for response correlation.
+
+```python
+import asyncio
+from klingex import KlingExWebSocket, KlingExError
+
+async def main():
+    ws = KlingExWebSocket(api_key="your_api_key")
+    await ws.connect()
+
+    # Place a limit order via WebSocket
+    try:
+        result = await ws.place_order(
+            symbol="BTC-USDT",
+            trading_pair_id=1,
+            side="BUY",
+            quantity="0.001",
+            price="50000",
+            raw_values=False,
+        )
+        print(f"Order placed: {result['orderId']}")
+    except KlingExError as e:
+        print(f"Order failed: {e}")
+
+    # Cancel an order via WebSocket
+    try:
+        result = await ws.cancel_order(
+            order_id="7c9e6679-7425-40de-944b-e07fc1f90ae7",
+            trading_pair_id=1,
+        )
+        print(f"Order cancelled: {result['success']}")
+    except KlingExError as e:
+        print(f"Cancel failed: {e}")
+
+    # Subscribe to account security events (login, 2FA, API key changes)
+    def on_account_event(data):
+        print(f"Account event: {data}")
+
+    await ws.subscribe_account(on_account_event)
+
+    # Or pass callbacks in the constructor
+    ws2 = KlingExWebSocket(
+        api_key="your_api_key",
+        on_order_result=lambda data: print(f"Order result: {data}"),
+        on_cancel_result=lambda data: print(f"Cancel result: {data}"),
+        on_user_trade=lambda data: print(f"Trade fill: {data}"),
+        on_account_event=lambda data: print(f"Account: {data}"),
+    )
+
+    await ws.close()
+
+asyncio.run(main())
+```
+
 ### Invoice/Payment Processing
 
 ```python

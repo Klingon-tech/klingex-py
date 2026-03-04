@@ -77,3 +77,4 @@ dmypy.json
 # Project specific
 .env.local
 .env.*.local
+.pypirc

@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "klingex"
-version = "1.1.0"
+version = "1.2.0"
 description = "Official Python SDK for KlingEx Exchange API"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "KlingEx", email = "support@klingex.io" }
+    { name = "KlingEx", email = "info@klingex.io" }
 ]
 keywords = [
     "klingex",

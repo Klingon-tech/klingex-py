@@ -1,6 +1,4 @@
-"""
-KlingEx Python SDK - Official Python client for KlingEx Exchange API
-"""
+"""KlingEx Python SDK - Official Python client for KlingEx Exchange API."""
 
 from klingex.client import KlingEx, AsyncKlingEx
 from klingex.http import KlingExError, AuthenticationError, RateLimitError, ValidationError
@@ -12,7 +10,11 @@ from klingex.types import (
     OrderStatus,
     # Market data
     Asset,
+    AssetInfo,
     Market,
+    MarketInfo,
+    SparklinePoint,
+    MarketSparklinesResponse,
     Ticker,
     OrderBook,
     OHLCV,
@@ -20,18 +22,58 @@ from klingex.types import (
     Order,
     OrderResponse,
     CancelOrderResponse,
+    CancelAllOrdersResponse,
+    OrderHistory,
+    OrdersHistoryResponse,
     # Wallet
     Balance,
+    WalletSystemStatus,
+    WalletStatusCounts,
+    WalletChainGroup,
+    AssetSyncRow,
+    AssetSyncStatus,
+    AssetSyncInfo,
+    # Withdrawals
+    WithdrawalSubmitResponse,
+    # Pools
+    Pool,
+    PoolDetail,
+    LPPosition,
+    PositionHistorySnapshot,
+    PositionHistoryResponse,
+    AddLiquidityResult,
+    RemoveLiquidityResult,
+    # Mining pool
+    MiningPoolConfig,
+    MiningBlock,
+    MiningBlocksResponse,
+    MiningStats,
+    MiningStatsCurrent,
+    MiningStatsSnapshot,
+    MiningLeaderboard,
+    MiningLeaderboardEntry,
+    MiningWorker,
+    MiningWorkersResponse,
+    MiningReward,
+    MiningRewardsResponse,
+    MiningPayout,
+    MiningPayoutsResponse,
+    # Gift codes
+    GiftCodeResponse,
+    BulkGiftCodeResponse,
     # Invoices
     Invoice,
     InvoiceListResponse,
     InvoiceFeeStats,
+    InvoiceStatusResponse,
+    PublicInvoice,
     InvoiceDenomination,
     PaymentOption,
     InvoicePayment,
 )
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
+
 __all__ = [
     # Main classes
     "KlingEx",
@@ -46,19 +88,65 @@ __all__ = [
     "OrderSide",
     "OrderType",
     "OrderStatus",
-    # Types
+    # Markets / assets
     "Asset",
+    "AssetInfo",
     "Market",
+    "MarketInfo",
+    "SparklinePoint",
+    "MarketSparklinesResponse",
     "Ticker",
     "OrderBook",
     "OHLCV",
+    # Orders
     "Order",
     "OrderResponse",
     "CancelOrderResponse",
+    "CancelAllOrdersResponse",
+    "OrderHistory",
+    "OrdersHistoryResponse",
+    # Wallet
     "Balance",
+    "WalletSystemStatus",
+    "WalletStatusCounts",
+    "WalletChainGroup",
+    "AssetSyncRow",
+    "AssetSyncStatus",
+    "AssetSyncInfo",
+    # Withdrawals
+    "WithdrawalSubmitResponse",
+    # Pools
+    "Pool",
+    "PoolDetail",
+    "LPPosition",
+    "PositionHistorySnapshot",
+    "PositionHistoryResponse",
+    "AddLiquidityResult",
+    "RemoveLiquidityResult",
+    # Mining pool
+    "MiningPoolConfig",
+    "MiningBlock",
+    "MiningBlocksResponse",
+    "MiningStats",
+    "MiningStatsCurrent",
+    "MiningStatsSnapshot",
+    "MiningLeaderboard",
+    "MiningLeaderboardEntry",
+    "MiningWorker",
+    "MiningWorkersResponse",
+    "MiningReward",
+    "MiningRewardsResponse",
+    "MiningPayout",
+    "MiningPayoutsResponse",
+    # Gift codes
+    "GiftCodeResponse",
+    "BulkGiftCodeResponse",
+    # Invoices
     "Invoice",
     "InvoiceListResponse",
     "InvoiceFeeStats",
+    "InvoiceStatusResponse",
+    "PublicInvoice",
     "InvoiceDenomination",
     "PaymentOption",
     "InvoicePayment",

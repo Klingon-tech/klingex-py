@@ -137,6 +137,47 @@ class HttpClient:
 
         return self._handle_response(response)
 
+    def request_bytes(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        authenticated: bool = False,
+    ) -> bytes:
+        """Make an HTTP request and return the raw response body.
+
+        Used for endpoints that don't return JSON (e.g. invoice PDF
+        downloads).
+        """
+        url = f"{self.base_url}{path}"
+        headers: Dict[str, str] = {}
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
+        if authenticated:
+            headers.update(self._get_auth_headers())
+        response = self._client.request(
+            method=method, url=url, params=params, headers=headers,
+        )
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            raise RateLimitError(
+                "Rate limit exceeded",
+                retry_after=int(retry_after) if retry_after else None,
+            )
+        if response.status_code >= 400:
+            # Try to surface the JSON error message if the server returned one.
+            try:
+                data = response.json()
+                msg = data.get("error") or data.get("message") or str(data)
+            except Exception:
+                msg = f"HTTP {response.status_code}: {response.text[:200]}"
+            if response.status_code == 401:
+                raise AuthenticationError(msg, status_code=401)
+            if response.status_code == 400:
+                raise ValidationError(msg, status_code=400)
+            raise KlingExError(msg, status_code=response.status_code)
+        return response.content
+
     def get(
         self,
         path: str,
@@ -271,6 +312,42 @@ class AsyncHttpClient:
         )
 
         return self._handle_response(response)
+
+    async def request_bytes(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        authenticated: bool = False,
+    ) -> bytes:
+        """Async variant of :meth:`HttpClient.request_bytes`."""
+        url = f"{self.base_url}{path}"
+        headers: Dict[str, str] = {}
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
+        if authenticated:
+            headers.update(self._get_auth_headers())
+        response = await self._client.request(
+            method=method, url=url, params=params, headers=headers,
+        )
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            raise RateLimitError(
+                "Rate limit exceeded",
+                retry_after=int(retry_after) if retry_after else None,
+            )
+        if response.status_code >= 400:
+            try:
+                data = response.json()
+                msg = data.get("error") or data.get("message") or str(data)
+            except Exception:
+                msg = f"HTTP {response.status_code}: {response.text[:200]}"
+            if response.status_code == 401:
+                raise AuthenticationError(msg, status_code=401)
+            if response.status_code == 400:
+                raise ValidationError(msg, status_code=400)
+            raise KlingExError(msg, status_code=response.status_code)
+        return response.content
 
     async def get(
         self,

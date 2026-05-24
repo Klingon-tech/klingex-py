@@ -100,7 +100,9 @@ class TestHttpClient:
         mock_response.json.return_value = {"error": "Unauthorized"}
         mock_request.return_value = mock_response
 
-        client = KlingEx()
+        # Need a key so the request actually goes out (and the mocked 401
+        # is what triggers AuthenticationError, not the "missing key" guard).
+        client = KlingEx(api_key="test_key")
 
         with pytest.raises(AuthenticationError) as exc_info:
             client._http.get("/test", authenticated=True)

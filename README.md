@@ -1,6 +1,6 @@
 # KlingEx Python SDK
 
-Official Python SDK for the KlingEx Exchange API.
+Official Python SDK for the [KlingEx](https://klingex.io) cryptocurrency exchange API.
 
 ## Installation
 
@@ -8,7 +8,7 @@ Official Python SDK for the KlingEx Exchange API.
 pip install klingex
 ```
 
-Or install from source:
+From source:
 
 ```bash
 git clone https://github.com/Klingon-tech/klingex-py.git
@@ -16,118 +16,181 @@ cd klingex-py
 pip install -e .
 ```
 
-## Quick Start
+## Authentication
 
-### Public API (No Authentication Required)
+The SDK authenticates **with API keys only** (`X-API-Key` header). JWT-only
+backend routes (account/profile/2FA management, deposit-address generation,
+deposit/withdrawal history, etc.) are intentionally not exposed.
+
+Generate a key in the web UI, granting only the scopes you need:
+
+| Scope       | What it unlocks                                                 |
+|-------------|-----------------------------------------------------------------|
+| `read`      | Balances, orders/trade history, LP positions, mining-pool data  |
+| `trade`     | Submit / cancel orders, cancel-all, create gift codes           |
+| `withdraw`  | Submit on-chain withdrawals                                     |
+| `liquidity` | Add / remove liquidity from AMM pools                           |
+
+Granting `withdraw` requires 2FA at key-creation time; submission then skips
+interactive 2FA so the key can be used unattended.
+
+## Quick start
+
+### Public market data (no auth)
 
 ```python
 from klingex import KlingEx
 
-# Create client (no credentials needed for public endpoints)
 client = KlingEx()
 
-# Get all available markets
 markets = client.markets.get_markets()
 for market in markets[:5]:
-    print(f"{market.symbol}: {market.base_asset_symbol}/{market.quote_asset_symbol}")
+    print(f"{market.base_asset_symbol}-{market.quote_asset_symbol}: {market.last_price}")
 
-# Get tickers for all markets (CMC/CoinGecko format)
-tickers = client.markets.get_tickers()
-for ticker in tickers[:3]:
-    print(f"{ticker.ticker_id}: {ticker.last_price}")
-
-# Get ticker for a specific market (use underscore format)
+# CMC/CoinGecko-style tickers use the underscore form
 ticker = client.markets.get_ticker("BTC_USDT")
-print(f"BTC_USDT: {ticker.last_price} (bid: {ticker.bid}, ask: {ticker.ask})")
+print(f"BTC_USDT bid={ticker.bid} ask={ticker.ask}")
 
-# Get orderbook (market_id is an integer)
-orderbook = client.markets.get_orderbook(market_id=1)
-print(f"Best bid: {orderbook.bids[0][0]} @ {orderbook.bids[0][1]}")
-print(f"Best ask: {orderbook.asks[0][0]} @ {orderbook.asks[0][1]}")
+# Orderbook is keyed by trading_pair_id
+ob = client.markets.get_orderbook(market_id=1)
+print(f"Best bid: {ob.bids[0][0]} @ {ob.bids[0][1]}")
 
-# Get OHLCV candlestick data
-candles = client.markets.get_ohlcv(market_id=1, timeframe="1h", limit=24)
-for candle in candles[:3]:
-    print(f"{candle.time_bucket}: O={candle.open_price} H={candle.high_price} L={candle.low_price} C={candle.close_price}")
+# Sparklines / per-pair info
+sparks = client.markets.get_sparklines()
+info = client.markets.get_market_info(base_symbol="BTC", quote_symbol="USDT")
+asset = client.markets.get_asset_info("BTC")
 ```
 
-### Authenticated API
+### Authenticated REST
 
 ```python
 from klingex import KlingEx, OrderSide
 
-# Create client with API key
 client = KlingEx(api_key="your_api_key")
 
-# Get wallet balances
-balances = client.wallet.get_balances()
-for balance in balances:
-    if int(balance.balance) > 0:
-        print(f"{balance.symbol}: {balance.available} available, {balance.locked_balance} locked")
+# Balances (requires `read` scope)
+for b in client.wallet.get_balances():
+    if int(b.balance) > 0:
+        print(f"{b.symbol}: available={b.available} locked={b.locked_balance}")
 
-# Get balance for a specific asset
-btc_balance = client.wallet.get_balance("BTC")
-print(f"BTC: {btc_balance.balance}")
-
-# Place a limit order (human-readable values by default)
+# Submit a limit order (`trade` scope). Human-readable amounts by default.
 order = client.orders.submit_order(
-    symbol="BTC-USDT",
-    trading_pair_id=1,
-    side=OrderSide.BUY,
-    quantity="0.001",  # 0.001 BTC
-    price="50000",     # $50,000 per BTC
-)
-print(f"Order placed: {order.order_id}")
-
-# Place a market order (price="0")
-market_order = client.orders.submit_order(
     symbol="BTC-USDT",
     trading_pair_id=1,
     side=OrderSide.BUY,
     quantity="0.001",
-    price="0",          # Price 0 = market order
-    slippage=0.01,      # 1% slippage tolerance
+    price="50000",
 )
 
-# Cancel an order (requires both order_id and trading_pair_id)
-result = client.orders.cancel_order(order.order_id, trading_pair_id=1)
-print(f"Cancelled: {result.message}, released: {result.released_balance}")
+# Market order: pass price="0"
+client.orders.submit_order(
+    symbol="BTC-USDT", trading_pair_id=1, side=OrderSide.BUY,
+    quantity="0.001", price="0",
+)
 
-# Get open orders
-open_orders = client.orders.get_open_orders()
-for order in open_orders:
-    print(f"{order.id}: {order.side} {order.amount} @ {order.price}")
+# Cancel one / cancel all
+client.orders.cancel_order(order.order_id, trading_pair_id=1)
+client.orders.cancel_all_orders(trading_pair_id=1)
 
-# Get all orders (with optional filters)
-orders = client.orders.get_orders(trading_pair_id=1, status="pending", limit=50)
+# Order history with filters (requires `read` scope)
+history = client.orders.get_orders_history(
+    trading_pair_id=1, status="filled", limit=50,
+)
 ```
 
-### Raw Values Mode
-
-By default, quantity and price use human-readable values (e.g., "1.5" for 1.5 BTC). For raw base unit values (e.g., satoshis), use `raw_values=True`:
+### Withdrawals
 
 ```python
-# Human-readable (default)
-order = client.orders.submit_order(
-    symbol="BTC-USDT",
-    trading_pair_id=1,
-    side=OrderSide.BUY,
-    quantity="0.5",      # 0.5 BTC
-    price="45000",       # $45,000
+# Amount is RAW INTEGER BASE UNITS (no decimal point).
+# Example: 0.1 BTC has 8 decimals -> 10_000_000 satoshis.
+result = client.withdrawals.submit(
+    symbol="BTC",
+    asset_id=1,
+    amount="10000000",
+    address="bc1q...",
 )
+print(result.withdrawal_id)
 
-# Raw base units
-order = client.orders.submit_order(
-    symbol="BTC-USDT",
-    trading_pair_id=1,
-    side=OrderSide.BUY,
-    quantity="50000000", # 50,000,000 satoshis = 0.5 BTC
-    price="4500000",     # $45,000 in base units
-    raw_values=True,
+# XRP destination tag / Graphene memo are first-class:
+client.withdrawals.submit(
+    symbol="XRP", asset_id=42, amount="1000000",
+    address="rXyz...", destination_tag=12345,
 )
 ```
 
-### Async Client
+### Liquidity pools
+
+```python
+# Public reads (no auth)
+pools = client.pools.list()
+detail = client.pools.get(pool_id=1)
+
+# `read` scope
+positions = client.pools.positions()
+chart = client.pools.position_history(pool_id=1, days=30)
+
+# `liquidity` scope. Amounts are smallest base units.
+mint = client.pools.add_liquidity(
+    pool_id=1,
+    base_amount_max="100000000",      # max base to deposit
+    quote_amount_max="5000000000",    # max quote to deposit
+    min_lp_tokens="1",                # slippage protection
+)
+burn = client.pools.remove_liquidity(
+    pool_id=1,
+    lp_tokens=mint.lp_tokens_minted,
+    min_base_out="0",
+    min_quote_out="0",
+)
+```
+
+### Mining pool
+
+```python
+configs = client.mining_pool.get_configs()
+stats = client.mining_pool.get_stats(symbol="HTN")
+top = client.mining_pool.get_leaderboard(symbol="HTN")
+
+# `read` scope
+workers = client.mining_pool.get_my_workers()
+rewards = client.mining_pool.get_my_rewards()
+payouts = client.mining_pool.get_my_payouts()
+```
+
+### Gift codes (`trade` scope)
+
+```python
+single = client.gift_codes.create(asset_id=1, amount="100000000")  # 1 USDT
+print(single.codes[0].code)
+
+batch = client.gift_codes.create_bulk(asset_id=1, amount_per_code="10000000", count=20)
+```
+
+### Invoices
+
+```python
+# Amount in invoice creation is HUMAN-READABLE (e.g., "100.00" for 100 USDT).
+invoice = client.invoices.create_invoice(
+    currency="USDT",
+    amount="100.00",
+    accepted_coins=["BTC", "ETH", "USDT"],
+    description="Order #12345",
+    expires_in_minutes=60,
+)
+print(invoice.payment_page_url)
+
+# Each payment option in `invoice.payment_options` is what the buyer pays with;
+# the buyer picks one and sends `expected_amount` to `address`.
+for opt in invoice.payment_options or []:
+    print(f"{opt.symbol}: send {opt.expected_amount} to {opt.address}")
+
+# List / cancel / fee stats
+invoice_list = client.invoices.list_invoices(status="pending", page=1, page_size=20)
+client.invoices.cancel_invoice(invoice.id)
+fees = client.invoices.get_fee_stats()
+```
+
+### Async client
 
 ```python
 import asyncio
@@ -135,61 +198,53 @@ from klingex import AsyncKlingEx, OrderSide
 
 async def main():
     async with AsyncKlingEx(api_key="your_api_key") as client:
-        # Fetch multiple resources concurrently
-        markets, tickers, balances = await asyncio.gather(
+        markets, balances = await asyncio.gather(
             client.markets.get_markets(),
-            client.markets.get_tickers(),
             client.wallet.get_balances(),
         )
-
-        # Place order
-        order = await client.orders.submit_order(
-            symbol="BTC-USDT",
-            trading_pair_id=1,
-            side=OrderSide.BUY,
-            quantity="0.001",
-            price="50000",
+        await client.orders.submit_order(
+            symbol="BTC-USDT", trading_pair_id=1, side=OrderSide.BUY,
+            quantity="0.001", price="50000",
         )
 
 asyncio.run(main())
 ```
 
-### WebSocket Streaming
+## WebSocket
+
+The WebSocket client speaks the real wire protocol: one subscription per
+trading pair delivers ticker + orderbook + trades, and user channels use
+bare names (`balance` singular, `orders`, `trades`, `account`, ...).
+API-key auth is performed post-connect; `connect()` blocks until the server
+replies with `auth_result`.
 
 ```python
 import asyncio
 from klingex import KlingExWebSocket
 
 async def main():
-    ws = KlingExWebSocket(api_key="your_api_key")  # Optional, for private channels
+    ws = KlingExWebSocket(api_key="your_api_key")  # omit for public-only
 
-    # Define handlers
-    def on_ticker(data):
-        ticker = data.get("data", {})
-        print(f"Ticker: {ticker.get('lastPrice')}")
+    def on_market(msg):
+        # msg["type"] is one of "ticker", "orderbook", "trade" (and friends)
+        print(msg.get("type"), msg.get("market"))
 
-    def on_trade(data):
-        trade = data.get("data", {})
-        print(f"Trade: {trade.get('side')} {trade.get('quantity')} @ {trade.get('price')}")
+    def on_orders(msg):
+        print("order update", msg)
 
-    def on_order_update(data):
-        order = data.get("data", {})
-        print(f"Order: {order.get('id')} - {order.get('status')}")
+    def on_balance(msg):
+        print("balance update", msg)
 
-    # Connect and subscribe
-    await ws.connect()
+    await ws.connect()  # waits for auth_result if api_key was provided
 
-    # Public channels
-    await ws.subscribe_ticker("BTC-USDT", on_ticker)
-    await ws.subscribe_trades("BTC-USDT", on_trade)
-    await ws.subscribe_orderbook("BTC-USDT")
+    # Public — one subscription per market covers ticker+orderbook+trades.
+    await ws.subscribe_market("BTC-USDT", on_market)
+    await ws.subscribe_ohlcv(market_id=1, timeframe="5m", handler=lambda d: print(d))
 
-    # Private channels (requires auth)
-    await ws.subscribe_user_orders(on_order_update)
-    await ws.subscribe_user_trades()
-    await ws.subscribe_user_balances()
+    # User channels (require `read` scope)
+    await ws.subscribe_user("orders", on_orders)
+    await ws.subscribe_user("balance", on_balance)   # NOTE: singular "balance"
 
-    # Keep running
     try:
         while True:
             await asyncio.sleep(1)
@@ -199,122 +254,44 @@ async def main():
 asyncio.run(main())
 ```
 
-### WebSocket Trading
-
-Place and cancel orders directly over the WebSocket connection for lower latency. Each request includes a `requestId` for response correlation.
+### WebSocket trading
 
 ```python
-import asyncio
-from klingex import KlingExWebSocket, KlingExError
+result = await ws.place_order(
+    symbol="BTC-USDT", trading_pair_id=1, side="BUY",
+    quantity="0.001", price="50000",
+)
+print(result["orderId"])
 
-async def main():
-    ws = KlingExWebSocket(api_key="your_api_key")
-    await ws.connect()
-
-    # Place a limit order via WebSocket
-    try:
-        result = await ws.place_order(
-            symbol="BTC-USDT",
-            trading_pair_id=1,
-            side="BUY",
-            quantity="0.001",
-            price="50000",
-            raw_values=False,
-        )
-        print(f"Order placed: {result['orderId']}")
-    except KlingExError as e:
-        print(f"Order failed: {e}")
-
-    # Cancel an order via WebSocket
-    try:
-        result = await ws.cancel_order(
-            order_id="7c9e6679-7425-40de-944b-e07fc1f90ae7",
-            trading_pair_id=1,
-        )
-        print(f"Order cancelled: {result['success']}")
-    except KlingExError as e:
-        print(f"Cancel failed: {e}")
-
-    # Subscribe to account security events (login, 2FA, API key changes)
-    def on_account_event(data):
-        print(f"Account event: {data}")
-
-    await ws.subscribe_account(on_account_event)
-
-    # Or pass callbacks in the constructor
-    ws2 = KlingExWebSocket(
-        api_key="your_api_key",
-        on_order_result=lambda data: print(f"Order result: {data}"),
-        on_cancel_result=lambda data: print(f"Cancel result: {data}"),
-        on_user_trade=lambda data: print(f"Trade fill: {data}"),
-        on_account_event=lambda data: print(f"Account: {data}"),
-    )
-
-    await ws.close()
-
-asyncio.run(main())
+await ws.cancel_order(order_id=result["orderId"], trading_pair_id=1)
 ```
 
-### Invoice/Payment Processing
+## Amount units cheat-sheet
+
+| Where                              | Units                                          |
+|------------------------------------|------------------------------------------------|
+| `orders.submit_order` (default)    | Human-readable (`"1.5"` for 1.5 BTC)           |
+| `orders.submit_order(raw_values=True)` | Smallest base units (`"150000000"`)        |
+| `withdrawals.submit`               | **Raw integer base units only** (no decimals)  |
+| `pools.add_liquidity` / `remove_liquidity` | Smallest base units                    |
+| `invoices.create_invoice`          | Human-readable for the chosen denomination     |
+| `gift_codes.create` / `create_bulk` | Smallest base units                           |
+
+## Error handling
 
 ```python
-# Create an invoice
-invoice = client.invoices.create_invoice(
-    currency="USDT",
-    amount="100.00",
-    accepted_coins=["BTC", "ETH", "USDT"],
-    description="Order #12345",
-    expires_in_minutes=60,
-)
-print(f"Invoice ID: {invoice.id}")
-print(f"Payment URL: {invoice.payment_page_url}")
-
-# List invoices
-invoice_list = client.invoices.list_invoices(status="pending", page=1, page_size=20)
-for inv in invoice_list.invoices:
-    print(f"{inv.id}: {inv.status}")
-
-# Get invoice details
-invoice = client.invoices.get_invoice(invoice.id)
-print(f"Status: {invoice.status}")
-
-# Cancel a pending invoice
-client.invoices.cancel_invoice(invoice.id)
-
-# Get fee statistics
-fees = client.invoices.get_fee_stats()
-print(f"Fee rate: {fees.current_fee_rate_percent}%")
-```
-
-## Error Handling
-
-```python
-from klingex import (
-    KlingEx,
-    KlingExError,
-    AuthenticationError,
-    RateLimitError,
-    ValidationError,
-)
-
-client = KlingEx(api_key="your_api_key")
+from klingex import KlingExError, AuthenticationError, RateLimitError, ValidationError
 
 try:
-    order = client.orders.submit_order(
-        symbol="BTC-USDT",
-        trading_pair_id=1,
-        side="BUY",
-        quantity="0.001",
-        price="50000",
-    )
+    client.orders.submit_order(...)
 except AuthenticationError as e:
-    print(f"Auth failed: {e.message}")
+    print(f"Bad key or missing scope: {e.message}")
 except RateLimitError as e:
-    print(f"Rate limited. Retry after: {e.retry_after}s")
+    print(f"Retry after {e.retry_after}s")
 except ValidationError as e:
-    print(f"Invalid request: {e.message}")
+    print(f"Bad request: {e.message}")
 except KlingExError as e:
-    print(f"API error: {e.message} (code: {e.code})")
+    print(f"{e.status_code}: {e.message}")
 ```
 
 ## Configuration
@@ -322,54 +299,58 @@ except KlingExError as e:
 ```python
 client = KlingEx(
     api_key="your_api_key",
-    base_url="https://api.klingex.io",  # Custom API URL
-    timeout=30.0,                        # Request timeout in seconds
+    base_url="https://api.klingex.io",
+    timeout=30.0,
 )
 ```
 
-## API Reference
+## API reference
 
-### Client Classes
+### Client classes
 
-- `KlingEx` - Synchronous client
-- `AsyncKlingEx` - Asynchronous client
-- `KlingExWebSocket` - WebSocket client for real-time data
+- `KlingEx` — synchronous client
+- `AsyncKlingEx` — async client
+- `KlingExWebSocket` — async WebSocket client
 
-### Endpoint Modules
+### Endpoint modules
 
-- `client.markets` - Public market data (assets, markets, tickers, orderbook, OHLCV)
-- `client.orders` - Order management (submit, cancel, list orders)
-- `client.wallet` - Wallet operations (balances)
-- `client.invoices` - Invoice/payment processing
+| `client.markets`     | Public market data (assets, markets, tickers, orderbook, OHLCV, sparklines, asset-info, market-info) |
+| `client.orders`      | Submit / cancel / cancel-all / list / history                                                        |
+| `client.wallet`      | Balances + public wallet/sync status                                                                 |
+| `client.withdrawals` | On-chain withdrawal submission (`withdraw` scope)                                                    |
+| `client.pools`       | AMM pool data, LP positions, add/remove liquidity                                                    |
+| `client.invoices`    | Merchant invoice create / list / get / cancel / fee stats / PDF                                      |
+| `client.mining_pool` | Public pool stats + authed worker/rewards/payouts                                                    |
+| `client.gift_codes`  | Single + bulk gift-code creation                                                                     |
 
-### Types
+### Enums
 
-- `OrderSide` - `BUY`, `SELL`
-- `OrderType` - `LIMIT`, `MARKET`
-- `OrderStatus` - `PENDING`, `OPEN`, `PARTIAL`, `FILLED`, `CANCELLED`
+- `OrderSide` — `BUY`, `SELL` (string values `"buy"` / `"sell"`)
+- `OrderType` — `LIMIT`, `MARKET`
+- `OrderStatus` — `PENDING`, `PARTIAL`, `FILLED`, `CANCELLED`, `REJECTED`
 
 ### Exceptions
 
-- `KlingExError` - Base exception
-- `AuthenticationError` - Invalid API credentials
-- `RateLimitError` - Rate limit exceeded
-- `ValidationError` - Invalid request parameters
+`KlingExError` (base), `AuthenticationError`, `RateLimitError`, `ValidationError`.
 
 ## Examples
 
-See the [examples](./examples) directory for complete working examples:
+See [`examples/`](./examples) for runnable scripts:
 
-- `basic_trading.py` - Basic trading operations
-- `async_trading.py` - Async/concurrent operations
-- `websocket_stream.py` - Real-time data streaming
-- `market_maker.py` - Simple market-making strategy
+- `basic_trading.py` — REST orders, balances, history
+- `async_trading.py` — concurrent fetches with `AsyncKlingEx`
+- `websocket_stream.py` — public + user channels over WS
+- `market_maker.py` — minimal market-making loop
+- `withdrawals_example.py` — submit an on-chain withdrawal
+- `pools_example.py` — query pools, add/remove liquidity
+- `mining_pool_example.py` — pool stats + your workers/rewards
 
 ## License
 
-MIT License - see [LICENSE](./LICENSE) for details.
+MIT — see [LICENSE](./LICENSE).
 
 ## Support
 
-- Documentation: https://klingex.io/support/api-docs
-- Issues: https://github.com/Klingon-tech/klingex-py/issues
-- Email: support@klingex.io
+- API docs: <https://klingex.io/support/api-docs>
+- Issues: <https://github.com/Klingon-tech/klingex-py/issues>
+- Email: <info@klingex.io>

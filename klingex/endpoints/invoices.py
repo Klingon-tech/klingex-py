@@ -4,7 +4,13 @@ Invoices Endpoint - Payment invoice management
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from klingex.types import Invoice, InvoiceListResponse, InvoiceFeeStats
+from klingex.types import (
+    Invoice,
+    InvoiceListResponse,
+    InvoiceFeeStats,
+    InvoiceStatusResponse,
+    PublicInvoice,
+)
 
 if TYPE_CHECKING:
     from klingex.http import HttpClient, AsyncHttpClient
@@ -112,6 +118,30 @@ class InvoicesEndpoint:
         response = self._client.get("/api/invoices/fees", authenticated=True)
         return InvoiceFeeStats.model_validate(response.get("data", response))
 
+    def get_status(self, invoice_id: str) -> InvoiceStatusResponse:
+        """Poll invoice payment status (public endpoint, no auth).
+
+        Lightweight version of :meth:`get_invoice` intended for unauthenticated
+        payment-page polling.
+        """
+        response = self._client.get(f"/api/invoices/{invoice_id}/status")
+        return InvoiceStatusResponse.model_validate(response.get("data", response))
+
+    def get_public(self, invoice_id: str) -> PublicInvoice:
+        """Fetch the public payment-page view of an invoice (no auth).
+
+        Returned by the merchant-hosted pay URL; contains payment_options,
+        merchant_name, and remaining time.
+        """
+        response = self._client.get(f"/api/invoices/{invoice_id}/pay")
+        return PublicInvoice.model_validate(response.get("data", response))
+
+    def get_pdf(self, invoice_id: str) -> bytes:
+        """Download the invoice PDF (requires ``read`` scope)."""
+        return self._client.request_bytes(
+            "GET", f"/api/invoices/{invoice_id}/pdf", authenticated=True,
+        )
+
 
 class AsyncInvoicesEndpoint:
     """Async invoice management endpoints"""
@@ -187,3 +217,19 @@ class AsyncInvoicesEndpoint:
         """Get invoice fee statistics"""
         response = await self._client.get("/api/invoices/fees", authenticated=True)
         return InvoiceFeeStats.model_validate(response.get("data", response))
+
+    async def get_status(self, invoice_id: str) -> InvoiceStatusResponse:
+        """Poll invoice payment status (public, no auth)."""
+        response = await self._client.get(f"/api/invoices/{invoice_id}/status")
+        return InvoiceStatusResponse.model_validate(response.get("data", response))
+
+    async def get_public(self, invoice_id: str) -> PublicInvoice:
+        """Fetch the public payment-page view of an invoice (no auth)."""
+        response = await self._client.get(f"/api/invoices/{invoice_id}/pay")
+        return PublicInvoice.model_validate(response.get("data", response))
+
+    async def get_pdf(self, invoice_id: str) -> bytes:
+        """Download the invoice PDF (requires ``read`` scope)."""
+        return await self._client.request_bytes(
+            "GET", f"/api/invoices/{invoice_id}/pdf", authenticated=True,
+        )
